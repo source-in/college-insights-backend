@@ -1,3 +1,9 @@
+if (typeof TextEncoder === "undefined") {
+  const util = require("util");
+  global.TextEncoder = util.TextEncoder;
+  global.TextDecoder = util.TextDecoder;
+}
+
 const express = require("express");
 var cors = require("cors");
 const bodyParser = require("body-parser");
