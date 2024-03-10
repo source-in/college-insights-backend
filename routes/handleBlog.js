@@ -3,7 +3,7 @@ const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const router = express.Router();
 const multer = require("multer");
-const upload = multer({ dest: "uploads" });
+// const upload = multer({ dest: "uploads" });
 const mongoose = require("mongoose");
 const User = require("../models/userData");
 const Orderhistory = require("../models/orderHistory");
@@ -12,41 +12,50 @@ const BlogSchema = require("../models/blogData");
 const jwt = require("jsonwebtoken");
 const verifyToken = require("../middleware/jwtVerificationMid");
 require("dotenv").config();
-const fs = require("fs");
-const path = require("path");
 const TagSchema = require("../models/tags");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const storage = multer.memoryStorage();
+
+const upload = multer({ storage: storage });
 
 router.use(bodyParser.urlencoded({ extended: true }));
 router.use(bodyParser.json());
 
 router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
-  let newFilename;
-  if (req.file) {
-    let fileType = req.file.mimetype.split("/")[1];
-    newFilename = req.file.filename + "." + fileType;
-    fs.rename(
-      path.resolve(process.cwd(), `uploads/${req.file.filename}`),
-      path.resolve(process.cwd(), `uploads/${newFilename}`),
-      (error) => {
-        if (error) {
-          console.error("File renaming error:", error);
-          return res
-            .status(500)
-            .json({ message: "Error processing file upload" });
-        }
-        console.log("File Uploaded");
-      }
-    );
-  }
-
-  // Assuming tag names are sent in a request body field named 'tags' as an array of strings
-  let tagNames = req.body.tags || [];
-
-  if (tagNames.length > 0) {
-    tagNames = tagNames.split(",");
-  }
-
   try {
+    let blogImageUrl;
+    if (req.file) {
+      const file = req.file;
+      const key = `${Date.now().toString()}-${file.originalname}`;
+      const contentType = file.mimetype; // Use the file's original MIME type
+
+      const command = new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: key,
+        Body: file.buffer,
+        ContentType: contentType, // Set the MIME type
+      });
+
+      await s3Client.send(command);
+
+      blogImageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    }
+
+    // Assuming tag names are sent in a request body field named 'tags' as an array of strings
+    let tagNames = req.body.tags || [];
+    if (tagNames.length > 0) {
+      tagNames = tagNames.split(",");
+    }
+
     // Find or create tags and collect their IDs
     const tags = await Promise.all(
       tagNames.map(async (tagName) => {
@@ -65,7 +74,7 @@ router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
       title: req.body.title,
       content: req.body.content,
       authorID: req.body.authorID,
-      blogImage: newFilename || "",
+      blogImage: blogImageUrl || "", // Use the uploaded image URL or an empty string
       tags: tags, // Save tag IDs
     });
 
@@ -301,27 +310,26 @@ router.put(
     const { blogID } = req.params;
     const updatedData = req.body;
 
-    let newFilename;
-    if (req.file) {
-      let fileType = req.file.mimetype.split("/")[1];
-      newFilename = req.file.filename + "." + fileType;
-      fs.rename(
-        path.resolve(process.cwd(), `uploads/${req.file.filename}`),
-        path.resolve(process.cwd(), `uploads/${newFilename}`),
-        (error) => {
-          if (error) {
-            console.error("File renaming error:", error);
-            return res
-              .status(500)
-              .json({ message: "Error processing file upload" });
-          }
-          console.log("File Uploaded");
-        }
-      );
-    }
+    let blogImageUrl;
 
     try {
-      // Split tags by comma and remove any empty strings just in case
+      if (req.file) {
+        const file = req.file;
+        const key = `${Date.now().toString()}-${file.originalname}`;
+        const contentType = file.mimetype; // Get the correct content type from the uploaded file
+
+        const command = new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: key,
+          Body: file.buffer,
+          ContentType: contentType, // Set the correct content type
+        });
+
+        await s3Client.send(command);
+
+        blogImageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      }
+
       const tagNames = updatedData.tags
         ? updatedData.tags.split(",").filter((tag) => tag.trim().length > 0)
         : [];
@@ -339,16 +347,20 @@ router.put(
         })
       );
 
+      const updateFields = {
+        title: updatedData.title,
+        content: updatedData.content,
+        tags: tags,
+      };
+
+      // Only update the image URL if a new image was uploaded
+      if (blogImageUrl) {
+        updateFields.blogImage = blogImageUrl;
+      }
+
       const updatedBlog = await BlogSchema.findOneAndUpdate(
         { _id: blogID },
-        {
-          $set: {
-            title: updatedData.title,
-            content: updatedData.content,
-            tags: tags,
-            // other fields to update...
-          },
-        },
+        { $set: updateFields },
         { new: true }
       );
 
