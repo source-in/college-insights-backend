@@ -42,9 +42,9 @@ router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
   // Assuming tag names are sent in a request body field named 'tags' as an array of strings
   let tagNames = req.body.tags || [];
 
-  // if (tagNames.length > 0) {
-  //   tagNames = tagNames.split(",");
-  // }
+  if (tagNames.length > 0) {
+    tagNames = tagNames.split(",");
+  }
 
   try {
     // Find or create tags and collect their IDs
@@ -85,6 +85,7 @@ router.get("/getAllBlog", (req, res) => {
   BlogSchema.find()
     .populate("authorID", "-password")
     .populate("tags")
+    .sort({ createdAt: -1 })
     .then((response) => {
       res.status(200).json({ response });
     })
