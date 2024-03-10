@@ -27,6 +27,11 @@ app.use(bodyParser.json());
 app.use("/static", express.static(path.resolve("uploads")));
 
 app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+  })
+);
 app.use("/login", loginRoute);
 app.use("/signin", signinRoute);
 app.use("/findUser", findUserRoute);
