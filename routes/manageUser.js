@@ -91,7 +91,7 @@ router.post("/getPerticularUser", verifyToken, (req, res) => {
       return res.status(403).json({ message: "Token is not valid" });
     }
     User.findOne({ _id: req.body.userID })
-      .select("-password") // Exclude password field
+      // .select("-password") // Exclude password field
       .then((user) => {
         res.status(200).json({ user });
       })

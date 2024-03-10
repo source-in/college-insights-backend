@@ -42,7 +42,9 @@ router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
   // Assuming tag names are sent in a request body field named 'tags' as an array of strings
   let tagNames = req.body.tags || [];
 
-  tagNames = tagNames.split(",");
+  // if (tagNames.length > 0) {
+  //   tagNames = tagNames.split(",");
+  // }
 
   try {
     // Find or create tags and collect their IDs
@@ -92,6 +94,25 @@ router.get("/getAllBlog", (req, res) => {
         .status(300)
         .json({ message: "Something went Wrong in fetvhing All Blogs." });
     });
+});
+
+router.get("/getUserBlogs/:userID", async (req, res) => {
+  const { userID } = req.params;
+  try {
+    const userBlogs = await BlogSchema.find({ authorID: userID });
+
+    if (userBlogs.length === 0) {
+      // Handle the case where the user has no blogs
+      return res.status(200).json({ message: "No blogs found for this user." });
+    }
+
+    res.status(200).json(userBlogs);
+  } catch (err) {
+    console.error("Error in getting user blogs:", err);
+    res
+      .status(500)
+      .json({ message: "Something went wrong in fetching user blogs." });
+  }
 });
 
 router.post("/getAllDisplayBlog", (req, res) => {
@@ -148,12 +169,12 @@ router.post("/deleteBlog", verifyToken, (req, res) => {
   jwt.verify(req.token, "secretkey", (err, result) => {
     BlogSchema.deleteOne({ _id: req.body.blogID })
       .then((response) => {
-        res.status(200).json({ message: "BLog Deletedd Successfully" });
+        res.status(200).json({ message: "Blog Deleted Successfully" });
       })
       .catch((err) => {
         res
           .status(300)
-          .json({ message: "Something went wring in deleting the BLog" });
+          .json({ message: "Something went wrong in deleting the BLog" });
       });
   });
 });
@@ -269,6 +290,90 @@ router.get("/relatedBlogs/:blogID", async (req, res) => {
   } catch (error) {
     console.error("Error fetching related blogs:", error);
     res.status(500).json({ message: "Error fetching related blogs." });
+  }
+});
+
+router.put(
+  "/editBlog/:blogID",
+  upload.single("blogImage"),
+  async (req, res) => {
+    const { blogID } = req.params;
+    const updatedData = req.body;
+
+    let newFilename;
+    if (req.file) {
+      let fileType = req.file.mimetype.split("/")[1];
+      newFilename = req.file.filename + "." + fileType;
+      fs.rename(
+        path.resolve(process.cwd(), `uploads/${req.file.filename}`),
+        path.resolve(process.cwd(), `uploads/${newFilename}`),
+        (error) => {
+          if (error) {
+            console.error("File renaming error:", error);
+            return res
+              .status(500)
+              .json({ message: "Error processing file upload" });
+          }
+          console.log("File Uploaded");
+        }
+      );
+    }
+
+    try {
+      // Split tags by comma and remove any empty strings just in case
+      const tagNames = updatedData.tags
+        ? updatedData.tags.split(",").filter((tag) => tag.trim().length > 0)
+        : [];
+
+      // Find or create tags and collect their IDs
+      const tags = await Promise.all(
+        tagNames.map(async (tagName) => {
+          let tag = await TagSchema.findOne({ name: tagName });
+          if (!tag) {
+            // If the tag doesn't exist, create it
+            tag = new TagSchema({ name: tagName });
+            await tag.save();
+          }
+          return tag._id; // Return the tag ID
+        })
+      );
+
+      const updatedBlog = await BlogSchema.findOneAndUpdate(
+        { _id: blogID },
+        {
+          $set: {
+            title: updatedData.title,
+            content: updatedData.content,
+            tags: tags,
+            // other fields to update...
+          },
+        },
+        { new: true }
+      );
+
+      if (!updatedBlog) {
+        return res
+          .status(404)
+          .json({ message: "Blog not found or user not authorized to edit." });
+      }
+
+      res
+        .status(200)
+        .json({ message: "Blog updated successfully", updatedBlog });
+    } catch (error) {
+      console.error("Error updating blog:", error);
+      res.status(500).json({ message: "Error updating the blog." });
+    }
+  }
+);
+
+router.get("/getAllTags", async (req, res) => {
+  try {
+    const tags = await TagSchema.find({});
+    res.status(200).json({ message: "Tags fetched successfully", tags });
+  } catch (error) {
+    console.error("Error fetching tags:", error);
+    res.status(500).json({ message: "Error fetching tags." });
   }
 });
 
