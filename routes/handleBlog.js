@@ -23,6 +23,10 @@ const s3Client = new S3Client({
   },
 });
 
+function capitalizeFirstLetter(string) {
+  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+}
+
 const storage = multer.memoryStorage();
 
 const upload = multer({ storage: storage });
@@ -53,7 +57,9 @@ router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
     // Assuming tag names are sent in a request body field named 'tags' as an array of strings
     let tagNames = req.body.tags || [];
     if (tagNames.length > 0) {
-      tagNames = tagNames.split(",");
+      tagNames = tagNames
+        .split(",")
+        .map((tag) => capitalizeFirstLetter(tag.trim()));
     }
 
     // Find or create tags and collect their IDs
@@ -331,7 +337,9 @@ router.put(
       }
 
       const tagNames = updatedData.tags
-        ? updatedData.tags.split(",").filter((tag) => tag.trim().length > 0)
+        ? updatedData.tags
+            .split(",")
+            .map((tag) => capitalizeFirstLetter(tag.trim()))
         : [];
 
       // Find or create tags and collect their IDs
