@@ -390,7 +390,7 @@ router.put(
 
 router.get("/getAllTags", async (req, res) => {
   try {
-    const tags = await TagSchema.find({});
+    const tags = await TagSchema.find({}).sort({ name: 1 });
     res.status(200).json({ message: "Tags fetched successfully", tags });
   } catch (error) {
     console.error("Error fetching tags:", error);
