@@ -11,7 +11,6 @@ const router = express.Router();
 
 const loginRoute = require("./routes/loginRoute");
 const signinRoute = require("./routes/signinRoute");
-const findUserRoute = require("./routes/findUserRoute");
 const manageUserRoute = require("./routes/manageUser");
 const handleBlog = require("./routes/handleBlog");
 const forgotPasswordRoute = require("./routes/ForgotPassword");
@@ -34,7 +33,6 @@ app.use(
 );
 app.use("/login", loginRoute);
 app.use("/signin", signinRoute);
-app.use("/findUser", findUserRoute);
 app.use("/manageUser", manageUserRoute);
 app.use("/forgotPassword", forgotPasswordRoute);
 app.use("/handleBlog", handleBlog);

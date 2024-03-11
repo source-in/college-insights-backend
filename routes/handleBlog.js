@@ -3,10 +3,8 @@ const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const router = express.Router();
 const multer = require("multer");
-// const upload = multer({ dest: "uploads" });
 const mongoose = require("mongoose");
 const User = require("../models/userData");
-const Orderhistory = require("../models/orderHistory");
 const BlogCommentSchema = require("../models/blogComment");
 const BlogSchema = require("../models/blogData");
 const jwt = require("jsonwebtoken");
@@ -40,13 +38,13 @@ router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
     if (req.file) {
       const file = req.file;
       const key = `${Date.now().toString()}-${file.originalname}`;
-      const contentType = file.mimetype; // Use the file's original MIME type
+      const contentType = file.mimetype;
 
       const command = new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: key,
         Body: file.buffer,
-        ContentType: contentType, // Set the MIME type
+        ContentType: contentType,
       });
 
       await s3Client.send(command);
@@ -54,7 +52,6 @@ router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
       blogImageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
     }
 
-    // Assuming tag names are sent in a request body field named 'tags' as an array of strings
     let tagNames = req.body.tags || [];
     if (tagNames.length > 0) {
       tagNames = tagNames
@@ -62,26 +59,23 @@ router.post("/addBlog", upload.single("blogImage"), async (req, res) => {
         .map((tag) => capitalizeFirstLetter(tag.trim()));
     }
 
-    // Find or create tags and collect their IDs
     const tags = await Promise.all(
       tagNames.map(async (tagName) => {
         let tag = await TagSchema.findOne({ name: tagName });
         if (!tag) {
-          // If the tag doesn't exist, create it
           tag = new TagSchema({ name: tagName });
           await tag.save();
         }
-        return tag._id; // Return the tag ID
+        return tag._id;
       })
     );
 
-    // Create the new blog with tag IDs
     const newBlog = new BlogSchema({
       title: req.body.title,
       content: req.body.content,
       authorID: req.body.authorID,
-      blogImage: blogImageUrl || "", // Use the uploaded image URL or an empty string
-      tags: tags, // Save tag IDs
+      blogImage: blogImageUrl || "",
+      tags: tags,
     });
 
     const savedBlog = await newBlog.save();
@@ -159,28 +153,6 @@ router.post("/getBlogById", (req, res) => {
     });
 });
 
-router.post("/approveBlog", verifyToken, (req, res) => {
-  jwt.verify(req.token, "secretkey", (err, result) => {
-    console.log("Approveing");
-    BlogSchema.updateOne(
-      { _id: req.body.blogID },
-      {
-        $set: {
-          approveByAdmin: true,
-        },
-      }
-    )
-      .then((response) => {
-        res.status(200).json({ message: "Blog Approved" });
-      })
-      .catch((err) => {
-        res
-          .status(300)
-          .json({ message: "Something went wrong in approving Blog" });
-      });
-  });
-});
-
 router.post("/deleteBlog", verifyToken, (req, res) => {
   jwt.verify(req.token, "secretkey", (err, result) => {
     BlogSchema.deleteOne({ _id: req.body.blogID })
@@ -211,7 +183,7 @@ router.post("/likeBlog", (req, res) => {
   const { blogID, userID } = req.body;
   BlogSchema.findByIdAndUpdate(
     blogID,
-    { $addToSet: { likes: userID } }, // Use $addToSet to ensure no duplicates
+    { $addToSet: { likes: userID } },
     { new: true },
     (error, result) => {
       if (error) {
@@ -231,7 +203,7 @@ router.post("/unlikeBlog", (req, res) => {
   const { blogID, userID } = req.body;
   BlogSchema.findByIdAndUpdate(
     blogID,
-    { $pull: { likes: userID } }, // Use $pull to remove the user ID from likes
+    { $pull: { likes: userID } },
     { new: true },
     (error, result) => {
       if (error) {
@@ -277,7 +249,6 @@ router.post("/fetchComment", (req, res) => {
 router.get("/relatedBlogs/:blogID", async (req, res) => {
   try {
     const { blogID } = req.params;
-    // Step 2: Get the Tags of the Main Blog
     const mainBlog = await BlogSchema.findById(blogID).select("tags");
     if (!mainBlog) {
       return res.status(404).json({ message: "Main blog not found." });
@@ -285,16 +256,13 @@ router.get("/relatedBlogs/:blogID", async (req, res) => {
 
     let query = {};
     if (mainBlog.tags.length > 0) {
-      // Step 3: Find Related Blogs by Tags
-      query = { tags: { $in: mainBlog.tags }, _id: { $ne: blogID } }; // Exclude the main blog
+      query = { tags: { $in: mainBlog.tags }, _id: { $ne: blogID } };
     }
 
-    // Step 4 & 5: Fetch Related or Any Blogs with Limit
     const relatedBlogs = await BlogSchema.find(query)
       .populate("authorID", "-password")
       .limit(5);
 
-    // Step 6: Fallback to Any Blogs if No Related Blogs Found
     if (relatedBlogs.length === 0) {
       const fallbackBlogs = await BlogSchema.find({ _id: { $ne: blogID } })
         .populate("authorID", "-password")
@@ -322,13 +290,12 @@ router.put(
       if (req.file) {
         const file = req.file;
         const key = `${Date.now().toString()}-${file.originalname}`;
-        const contentType = file.mimetype; // Get the correct content type from the uploaded file
-
+        const contentType = file.mimetype;
         const command = new PutObjectCommand({
           Bucket: process.env.AWS_BUCKET_NAME,
           Key: key,
           Body: file.buffer,
-          ContentType: contentType, // Set the correct content type
+          ContentType: contentType,
         });
 
         await s3Client.send(command);
@@ -344,16 +311,14 @@ router.put(
             .map((tag) => capitalizeFirstLetter(tag.trim()))
         : [];
 
-      // Find or create tags and collect their IDs
       const tags = await Promise.all(
         tagNames.map(async (tagName) => {
           let tag = await TagSchema.findOne({ name: tagName });
           if (!tag) {
-            // If the tag doesn't exist, create it
             tag = new TagSchema({ name: tagName });
             await tag.save();
           }
-          return tag._id; // Return the tag ID
+          return tag._id;
         })
       );
 
@@ -363,7 +328,6 @@ router.put(
         tags: tags,
       };
 
-      // Only update the image URL if a new image was uploaded
       if (blogImageUrl !== undefined) {
         updateFields.blogImage = blogImageUrl;
       }
