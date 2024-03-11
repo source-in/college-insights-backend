@@ -334,6 +334,8 @@ router.put(
         await s3Client.send(command);
 
         blogImageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      } else if (req.body.blogImage === "null") {
+        blogImageUrl = null;
       }
 
       const tagNames = updatedData.tags
@@ -362,7 +364,7 @@ router.put(
       };
 
       // Only update the image URL if a new image was uploaded
-      if (blogImageUrl) {
+      if (blogImageUrl !== undefined) {
         updateFields.blogImage = blogImageUrl;
       }
 
